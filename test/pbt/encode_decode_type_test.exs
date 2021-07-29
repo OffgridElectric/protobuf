@@ -1,29 +1,24 @@
 defmodule Protobuf.EncodeDecodeTypeTest.PropertyGenerator do
-  alias Protobuf.{Encoder}
-
-  require Logger
-  import Protobuf.Decoder
-
-  def decode_type(wire, type, bin) do
-    [n] = raw_decode_value(wire, bin, [])
-    decode_type_m(type, :fake_key, n)
+  def decode(type, bin) do
+    bin
+    |> TestMsg.Scalars.decode()
+    |> Map.fetch!(type)
   end
 
-  defmacro make_property(gen_func, field_type, wire_type) do
-    quote do
-      property unquote(Atom.to_string(field_type)) <> " roundtrip" do
-        forall n <- unquote(gen_func) do
-          iodata = Encoder.encode_type(unquote(field_type), n)
-          bin = IO.iodata_to_binary(iodata)
+  def encode(type, val) do
+    [{type, val}]
+    |> TestMsg.Scalars.new!()
+    |> Protobuf.Encoder.encode(iolist: false)
+  end
 
-          ensure(
-            n ==
-              decode_type(
-                unquote(wire_type),
-                unquote(field_type),
-                bin
-              )
-          )
+  defmacro make_property(gen_func, field_type) do
+    quote do
+      property "#{unquote(field_type)} roundtrip" do
+        check all n <- unquote(gen_func) do
+          field_type = unquote(field_type)
+          bin = encode(field_type, n)
+
+          assert n == decode(field_type, bin)
         end
       end
     end
@@ -32,35 +27,16 @@ defmodule Protobuf.EncodeDecodeTypeTest.PropertyGenerator do
   # Since float point is not precise, make canonical value before doing PBT
   # ref: http://hypothesis.works/articles/canonical-serialization/
   # and try 0.2 here: https://www.h-schmidt.net/FloatConverter/IEEE754.html
-  defmacro make_canonical_property(gen_func, field_type, wire_type) do
+  defmacro make_canonical_property(gen_func, field_type) do
     quote do
-      property unquote(Atom.to_string(field_type)) <> " canonical roundtrip" do
-        forall n <- unquote(gen_func) do
-          encoded_val =
-            unquote(field_type)
-            |> Encoder.encode_type(n)
-            |> IO.iodata_to_binary()
+      property "#{unquote(field_type)} canonical roundtrip" do
+        check all n <- unquote(gen_func) do
+          field_type = unquote(field_type)
+          encoded_val = encode(field_type, n)
+          canonical_val = decode(field_type, encoded_val)
+          bin = encode(field_type, canonical_val)
 
-          canonical_val =
-            decode_type(
-              unquote(wire_type),
-              unquote(field_type),
-              encoded_val
-            )
-
-          bin =
-            unquote(field_type)
-            |> Encoder.encode_type(canonical_val)
-            |> IO.iodata_to_binary()
-
-          ensure(
-            canonical_val ==
-              decode_type(
-                unquote(wire_type),
-                unquote(field_type),
-                bin
-              )
-          )
+          assert canonical_val == decode(field_type, bin)
         end
       end
     end
@@ -68,30 +44,39 @@ defmodule Protobuf.EncodeDecodeTypeTest.PropertyGenerator do
 end
 
 defmodule Protobuf.EncodeDecodeTypeTest do
-  use ExUnit.Case
-  use EQC.ExUnit
+  use ExUnit.Case, async: true
+  use ExUnitProperties
 
   import Protobuf.EncodeDecodeTypeTest.PropertyGenerator
 
   defp uint32_gen do
-    let(<<x::unsigned-integer-size(32)>> <- binary(4), do: return(x))
+    map(binary(length: 4), fn <<x::unsigned-integer-size(32)>> -> x end)
   end
 
   defp uint64_gen do
-    let(<<x::unsigned-integer-size(64)>> <- binary(8), do: return(x))
+    map(binary(length: 8), fn <<x::unsigned-integer-size(64)>> -> x end)
   end
 
-  make_property(int(), :int32, 0)
-  make_property(largeint(), :int64, 0)
-  make_property(uint32_gen(), :uint32, 0)
-  make_property(uint64_gen(), :uint64, 0)
-  make_property(int(), :sint32, 0)
-  make_property(largeint(), :sint64, 0)
-  make_property(bool(), :bool, 0)
+  defp large_integer do
+    scale(integer(), &(&1 * 10_000))
+  end
 
-  make_property(nat(), :fixed64, 1)
-  make_property(largeint(), :sfixed64, 1)
-  make_canonical_property(resize(64, real()), :double, 1)
+  defp natural_number do
+    map(integer(), &abs/1)
+  end
 
-  make_canonical_property(resize(32, real()), :float, 5)
+  make_property(integer(), :int32)
+  make_property(large_integer(), :int64)
+  make_property(uint32_gen(), :uint32)
+  make_property(uint64_gen(), :uint64)
+  make_property(integer(), :sint32)
+  make_property(large_integer(), :sint64)
+
+  make_property(boolean(), :bool)
+
+  make_property(natural_number(), :fixed64)
+  make_property(large_integer(), :sfixed64)
+
+  make_canonical_property(float(), :double)
+  make_canonical_property(float(), :float)
 end
