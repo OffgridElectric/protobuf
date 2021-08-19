@@ -117,6 +117,42 @@ defmodule Protobuf.DecoderTest do
              TestMsg.Foo2.new(a: 0, l: %{})
   end
 
+  test "decodes packed binary using RepeatedUnPacked for proto2" do
+    packed = <<10, 5, 1, 2, 3, 4, 5>>
+
+    struct = Decoder.decode(packed, TestMsg.RepeatedUnPacked)
+
+    assert %TestMsg.RepeatedUnPacked{} = struct
+    assert struct.a == [1, 2, 3, 4, 5]
+  end
+
+  test "decodes unpacked binary using RepeatedUnPacked for proto2" do
+    unpacked = <<8, 1, 8, 2, 8, 3, 8, 4, 8, 5>>
+
+    struct = Decoder.decode(unpacked, TestMsg.RepeatedUnPacked)
+
+    assert %TestMsg.RepeatedUnPacked{} = struct
+    assert struct.a == [1, 2, 3, 4, 5]
+  end
+
+  test "decodes packed binary using RepeatedPacked for proto2" do
+    packed = <<10, 5, 1, 2, 3, 4, 5>>
+
+    struct = Decoder.decode(packed, TestMsg.RepeatedPacked)
+
+    assert %TestMsg.RepeatedPacked{} = struct
+    assert struct.a == [1, 2, 3, 4, 5]
+  end
+
+  test "decodes unpacked binary using RepeatedPacked for proto2" do
+    unpacked = <<8, 1, 8, 2, 8, 3, 8, 4, 8, 5>>
+
+    struct = Decoder.decode(unpacked, TestMsg.RepeatedPacked)
+
+    assert %TestMsg.RepeatedPacked{} = struct
+    assert struct.a == [1, 2, 3, 4, 5]
+  end
+
   test "decodes custom default message for proto2" do
     assert Decoder.decode(<<8, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0>>, TestMsg.Foo2) ==
              TestMsg.Foo2.new(a: 0, b: 0)

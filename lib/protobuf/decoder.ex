@@ -119,14 +119,24 @@ defmodule Protobuf.Decoder do
     handle_value(rest, field_number, wire_delimited(), bytes, message, props)
   end
 
+  @wire_type_for_packed Protobuf.Encoder.wire_type(:bytes)
+
   defp handle_value(<<bin::bits>>, field_number, wire_type, value, message, props) do
     case props.field_props do
       %{^field_number => %{packed?: true} = prop} ->
-        key = prop.name_atom
-        current_value = Map.get(message, key)
-        new_value = value_for_packed(value, current_value, prop)
-        new_message = Map.put(message, key, new_value)
-        build_message(bin, new_message, props)
+        if wire_type == @wire_type_for_packed && is_type_packable?(prop.type) do
+          key = prop.name_atom
+          current_value = Map.get(message, key)
+          new_value = value_for_packed(value, current_value, prop)
+          new_message = Map.put(message, key, new_value)
+          build_message(bin, new_message, props)
+        else
+          key = field_key(prop, props)
+          current_value = Map.get(message, key)
+          new_value = value_for_field(value, current_value, prop)
+          new_message = Map.put(message, key, new_value)
+          build_message(bin, new_message, props)
+        end
 
       %{^field_number => %{wire_type: ^wire_type} = prop} ->
         key = field_key(prop, props)
@@ -135,9 +145,17 @@ defmodule Protobuf.Decoder do
         new_message = Map.put(message, key, new_value)
         build_message(bin, new_message, props)
 
-      %{^field_number => %{wire_type: wanted, name: field}} ->
-        message = "wrong wire_type for #{field}: got #{wire_type}, want #{wanted}"
-        raise DecodeError, message: message
+      %{^field_number => %{wire_type: wanted, name: field} = prop} ->
+        if wire_type == @wire_type_for_packed && is_type_packable?(prop.type) do
+          key = prop.name_atom
+          current_value = Map.get(message, key)
+          new_value = value_for_packed(value, current_value, prop)
+          new_message = Map.put(message, key, new_value)
+          build_message(bin, new_message, props)
+        else
+          message = "wrong wire_type for #{field}: got #{wire_type}, want #{wanted}"
+          raise DecodeError, message: message
+        end
 
       %{} ->
         %mod{} = message
@@ -227,4 +245,20 @@ defmodule Protobuf.Decoder do
     {field_key, ^oneof_number} = Enum.at(oneofs, oneof_number)
     field_key
   end
+
+  defp is_type_packable?(:int32), do: true
+  defp is_type_packable?(:int64), do: true
+  defp is_type_packable?(:uint32), do: true
+  defp is_type_packable?(:uint64), do: true
+  defp is_type_packable?(:sint32), do: true
+  defp is_type_packable?(:sint64), do: true
+  defp is_type_packable?(:fixed32), do: true
+  defp is_type_packable?(:fixed64), do: true
+  defp is_type_packable?(:sfixed32), do: true
+  defp is_type_packable?(:sfixed64), do: true
+  defp is_type_packable?(:bool), do: true
+  defp is_type_packable?(:float), do: true
+  defp is_type_packable?(:double), do: true
+  defp is_type_packable?({:enum, _}), do: true
+  defp is_type_packable?(_), do: false
 end
