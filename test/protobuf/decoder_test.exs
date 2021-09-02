@@ -152,6 +152,24 @@ defmodule Protobuf.DecoderTest do
     assert struct.a == [-1, 1, -2, 2, -3]
   end
 
+  test "decodes packed binary using UnsignedInt32Repeated for proto2" do
+    packed = <<10, 5, 1, 2, 3, 4, 5>>
+
+    struct = Decoder.decode(packed, TestMsg.UnsignedInt32Repeated)
+
+    assert %TestMsg.UnsignedInt32Repeated{} = struct
+    assert struct.a == [1, 2, 3, 4, 5]
+  end
+
+  test "decodes unpacked binary using UnsignedInt32RepeatedPacked for proto2" do
+    unpacked = <<8, 1, 8, 2, 8, 3, 8, 4, 8, 5>>
+
+    struct = Decoder.decode(unpacked, TestMsg.UnsignedInt32RepeatedPacked)
+
+    assert %TestMsg.UnsignedInt32RepeatedPacked{} = struct
+    assert struct.a == [1, 2, 3, 4, 5]
+  end
+
   test "decodes custom default message for proto2" do
     assert Decoder.decode(<<8, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0>>, TestMsg.Foo2) ==
              TestMsg.Foo2.new(a: 0, b: 0)
