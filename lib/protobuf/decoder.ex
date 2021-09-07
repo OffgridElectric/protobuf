@@ -46,7 +46,13 @@ defmodule Protobuf.Decoder do
   end
 
   defp handle_field(<<bin::bits>>, field_number, wire_delimited(), message, props) do
-    decode_delimited(bin, field_number, message, props)
+    try do
+      decode_delimited(bin, field_number, message, props)
+    catch
+      {:decode_error, e} ->
+        msg = "decode_delimited error: #{e.msg}"
+        raise Protobuf.DecodeError, message: msg
+    end
   end
 
   defp handle_field(<<bin::bits>>, field_number, wire_32bits(), message, props) do
@@ -115,8 +121,21 @@ defmodule Protobuf.Decoder do
   end
 
   decoder :defp, :decode_delimited, [:field_number, :message, :props] do
-    <<bytes::bytes-size(value), rest::bits>> = rest
-    handle_value(rest, field_number, wire_delimited(), bytes, message, props)
+    bytes_remaining = byte_size(rest)
+
+    if value <= bytes_remaining do
+      <<bytes::bytes-size(value), rest::bits>> = rest
+      handle_value(rest, field_number, wire_delimited(), bytes, message, props)
+    else
+      field_name = props.field_props[field_number].name_atom
+
+      msg =
+        "Insufficient data decoding field: \"#{field_name}\". Expected #{value} bytes from #{
+          inspect(rest)
+        } (#{inspect(bytes_remaining)} bytes)"
+
+      throw({:decode_error, %{msg: msg}})
+    end
   end
 
   @wire_type_for_packed Protobuf.Encoder.wire_type(:bytes)
