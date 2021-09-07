@@ -127,12 +127,16 @@ defmodule Protobuf.Decoder do
       <<bytes::bytes-size(value), rest::bits>> = rest
       handle_value(rest, field_number, wire_delimited(), bytes, message, props)
     else
-      field_name = props.field_props[field_number].name_atom
+      field =
+        case props.field_props do
+          %{^field_number => %{name_atom: field_name}} -> "field: \"#{field_name}\""
+          _ -> "field_number: #{field_number}"
+        end
 
       msg =
-        "Insufficient data decoding field: \"#{field_name}\". Expected #{value} bytes from #{
-          inspect(rest)
-        } (#{inspect(bytes_remaining)} bytes)"
+        "Insufficient data decoding #{field}. Expected #{value} bytes from #{inspect(rest)} (#{
+          inspect(bytes_remaining)
+        } bytes)"
 
       throw({:decode_error, %{msg: msg}})
     end
