@@ -121,6 +121,10 @@ defmodule Protobuf.Decoder do
       wire_64bits() ->
         <<_skip::bits-64, rest::bits>> = rest
         skip_field(rest, message, props, groups)
+
+      unknown ->
+        msg = "unknown wire_type #{inspect(unknown)} for field #{inspect(field_number)}"
+        raise Protobuf.DecodeError, message: msg
     end
   end
 
