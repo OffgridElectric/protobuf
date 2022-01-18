@@ -93,6 +93,20 @@ defmodule TestMsg do
     field :a, 1, repeated: true, type: :sint32, packed: true
   end
 
+  defmodule UnsignedInt32Repeated do
+    @moduledoc false
+    use Protobuf, syntax: :proto2
+
+    field :a, 1, repeated: true, type: :uint32
+  end
+
+  defmodule UnsignedInt32RepeatedPacked do
+    @moduledoc false
+    use Protobuf, syntax: :proto2
+
+    field :a, 1, repeated: true, type: :uint32, packed: true
+  end
+
   defmodule Oneof do
     @moduledoc false
     use Protobuf
